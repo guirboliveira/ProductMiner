@@ -1,0 +1,6 @@
+{
+  "name": "Minerador de Produtos Mercado Livre",
+  "description": "Uma ferramenta poderosa para pesquisar, analisar, minerar e exportar dados de produtos do Mercado Livre em tempo real, com insights de preços, frete e concorrência.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
