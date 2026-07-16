@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 
 interface ProductTableProps {
@@ -19,6 +20,11 @@ interface ProductTableProps {
   selectedCompareIds: string[];
   onToggleCompare: (productId: string) => void;
   currencySymbol: string;
+  selectedExtractIds?: string[];
+  onToggleExtract?: (productId: string) => void;
+  onToggleAllExtract?: (productIds: string[]) => void;
+  onExtractDetails?: (productIds: string[]) => void;
+  isExtractingDetails?: boolean;
 }
 
 export default function ProductTable({
@@ -27,6 +33,11 @@ export default function ProductTable({
   selectedCompareIds,
   onToggleCompare,
   currencySymbol,
+  selectedExtractIds = [],
+  onToggleExtract,
+  onToggleAllExtract,
+  onExtractDetails,
+  isExtractingDetails = false,
 }: ProductTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'price_asc' | 'price_desc' | 'sales_desc' | 'none'>('none');
@@ -72,8 +83,7 @@ export default function ProductTable({
     }
   };
 
-  // Export to CSV
-  const exportToCSV = () => {
+  const exportProductsToCSV = (list: MLProduct[]) => {
     const headers = [
       'ID',
       'Titulo',
@@ -84,44 +94,74 @@ export default function ProductTable({
       'Quantidade Vendida',
       'Vendedor',
       'URL',
+      'Garantia',
+      'Descricao',
+      'Especificacoes'
     ];
 
-    const rows = processedProducts.map((p) => [
-      p.id,
-      `"${p.title.replace(/"/g, '""')}"`,
-      p.price,
-      p.currency_id,
-      p.condition,
-      p.shipping.free_shipping ? 'Sim' : 'Nao',
-      p.sold_quantity || 0,
-      `"${p.seller.nickname.replace(/"/g, '""')}"`,
-      p.permalink,
-    ]);
+    const rows = list.map((p) => {
+      const attributesStr = (p.attributes || [])
+        .map(a => `${a.name}: ${a.value_name || ''}`)
+        .join('; ');
+      return [
+        p.id,
+        `"${p.title.replace(/"/g, '""')}"`,
+        p.price,
+        p.currency_id,
+        p.condition,
+        p.shipping.free_shipping ? 'Sim' : 'Nao',
+        p.sold_quantity || 0,
+        `"${p.seller.nickname.replace(/"/g, '""')}"`,
+        p.permalink,
+        `"${(p.warranty || '').replace(/"/g, '""')}"`,
+        `"${(p.description || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+        `"${attributesStr.replace(/"/g, '""')}"`,
+      ];
+    });
 
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-
-    const encodedUri = encodeURI(csvContent);
+    const csvString = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `minerador_ml_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  // Export to JSON
-  const exportToJSON = () => {
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(processedProducts, null, 2)
-    )}`;
+  const exportProductsToJSON = (list: MLProduct[]) => {
+    const jsonString = JSON.stringify(list, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', jsonString);
+    link.setAttribute('href', url);
     link.setAttribute('download', `minerador_ml_${Date.now()}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export to CSV
+  const exportToCSV = () => {
+    exportProductsToCSV(processedProducts);
+  };
+
+  // Export to JSON
+  const exportToJSON = () => {
+    exportProductsToJSON(processedProducts);
+  };
+
+  const exportSelectedCSV = () => {
+    const selectedProducts = processedProducts.filter(p => selectedExtractIds.includes(p.id));
+    exportProductsToCSV(selectedProducts);
+  };
+
+  const exportSelectedJSON = () => {
+    const selectedProducts = processedProducts.filter(p => selectedExtractIds.includes(p.id));
+    exportProductsToJSON(selectedProducts);
   };
 
   const formatCurrency = (val: number) => {
@@ -136,69 +176,143 @@ export default function ProductTable({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" id="product-table-wrapper">
-      {/* Search, Filter, and Export bar */}
-      <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Filtrar nesta mineração..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full h-10 pl-9 pr-4 bg-white border border-slate-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-          {/* Sorting */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Ordenar:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => {
-                setSortBy(e.target.value as any);
-                setCurrentPage(1);
-              }}
-              className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:border-blue-500 cursor-pointer"
-            >
-              <option value="none">Relevância</option>
-              <option value="price_asc">Menor Preço</option>
-              <option value="price_desc">Maior Preço</option>
-              <option value="sales_desc">Mais Vendidos</option>
-            </select>
+      {/* Search, Filter, and Export bar / Bulk Actions Bar */}
+      {selectedExtractIds.length > 0 ? (
+        <div className="p-4 bg-blue-605 text-white bg-blue-600 flex flex-col sm:flex-row gap-3 items-center justify-between animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold bg-white/20 px-2.5 py-1 rounded-full">
+              {selectedExtractIds.length} selecionado(s)
+            </span>
+            <span className="text-xs font-semibold">Extração e exportação em lote:</span>
           </div>
-
-          {/* Export action dropdown */}
-          <div className="flex items-center gap-1.5">
+          
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             <button
-              onClick={exportToCSV}
-              className="h-10 px-3.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
-              title="Exportar como arquivo CSV compatível com Excel"
-              id="export-csv-button"
+              onClick={() => onExtractDetails?.(selectedExtractIds)}
+              disabled={isExtractingDetails}
+              className="h-9 px-4 bg-white text-blue-600 hover:bg-slate-100 disabled:opacity-50 rounded-xl flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+            >
+              {isExtractingDetails ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Extraindo...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Extrair Detalhes</span>
+                </>
+              )}
+            </button>
+            
+            <button
+              onClick={exportSelectedCSV}
+              className="h-9 px-3.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+              title="Exportar itens selecionados para CSV"
             >
               <Download className="h-3.5 w-3.5" />
               <span>CSV</span>
             </button>
+            
             <button
-              onClick={exportToJSON}
-              className="h-10 px-3.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
-              title="Exportar dados estruturados como JSON"
-              id="export-json-button"
+              onClick={exportSelectedJSON}
+              className="h-9 px-3.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+              title="Exportar itens selecionados para JSON"
             >
               <span>JSON</span>
             </button>
+
+            <button
+              onClick={() => onToggleAllExtract?.([])}
+              className="h-9 px-3 text-white/80 hover:text-white text-xs font-semibold transition cursor-pointer"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Filtrar nesta mineração..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full h-10 pl-9 pr-4 bg-white border border-slate-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+            {/* Sorting */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Ordenar:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+                className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:border-blue-500 cursor-pointer"
+              >
+                <option value="none">Relevância</option>
+                <option value="price_asc">Menor Preço</option>
+                <option value="price_desc">Maior Preço</option>
+                <option value="sales_desc">Mais Vendidos</option>
+              </select>
+            </div>
+
+            {/* Export action dropdown */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={exportToCSV}
+                className="h-10 px-3.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+                title="Exportar como arquivo CSV compatível com Excel"
+                id="export-csv-button"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>CSV</span>
+              </button>
+              <button
+                onClick={exportToJSON}
+                className="h-10 px-3.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+                title="Exportar dados estruturados como JSON"
+                id="export-json-button"
+              >
+                <span>JSON</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grid List */}
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/20 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+              <th className="py-4 px-4 text-center w-12">
+                <input
+                  type="checkbox"
+                  checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedExtractIds.includes(p.id))}
+                  onChange={(e) => {
+                    if (onToggleAllExtract) {
+                      const pageIds = paginatedProducts.map(p => p.id);
+                      if (e.target.checked) {
+                        const merged = Array.from(new Set([...selectedExtractIds, ...pageIds]));
+                        onToggleAllExtract(merged);
+                      } else {
+                        const filtered = selectedExtractIds.filter(id => !pageIds.includes(id));
+                        onToggleAllExtract(filtered);
+                      }
+                    }
+                  }}
+                  className="rounded border-slate-350 text-blue-600 focus:ring-blue-500 cursor-pointer h-4 w-4"
+                />
+              </th>
               <th className="py-4 px-6 text-center w-12">Comparar</th>
               <th className="py-4 px-4 w-16">Foto</th>
               <th className="py-4 px-4">Produto</th>
@@ -217,9 +331,23 @@ export default function ProductTable({
                   <tr
                     key={p.id}
                     className={`hover:bg-slate-50/70 transition-colors ${
-                      isSelectedForCompare ? 'bg-blue-50/10' : ''
+                      selectedExtractIds.includes(p.id)
+                        ? 'bg-blue-50/20'
+                        : isSelectedForCompare
+                        ? 'bg-blue-50/10'
+                        : ''
                     }`}
                   >
+                    {/* Extract Selection */}
+                    <td className="py-4 px-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedExtractIds.includes(p.id)}
+                        onChange={() => onToggleExtract?.(p.id)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer h-4 w-4"
+                      />
+                    </td>
+
                     {/* Compare Selection */}
                     <td className="py-4 px-6 text-center">
                       <button
@@ -267,6 +395,12 @@ export default function ProductTable({
                             <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[9px] font-semibold flex items-center gap-0.5">
                               <Sparkles className="h-2 w-2" />
                               Loja Oficial
+                            </span>
+                          )}
+                          {p.description !== undefined && (
+                            <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-md text-[9px] font-bold flex items-center gap-0.5" title="Especificações e descrição completa extraídas">
+                              <Sparkles className="h-2.5 w-2.5 text-emerald-500 fill-emerald-500 animate-pulse" />
+                              Extraído
                             </span>
                           )}
                         </div>
@@ -338,7 +472,7 @@ export default function ProductTable({
               })
             ) : (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400 text-xs">
+                <td colSpan={9} className="py-12 text-center text-slate-400 text-xs">
                   Nenhum produto atende aos filtros aplicados nesta mineração.
                 </td>
               </tr>

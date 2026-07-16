@@ -4,6 +4,27 @@ import { MiningFilters } from '../types';
 import { ML_SITES } from '../utils/mercadoLibre';
 import { motion, AnimatePresence } from 'motion/react';
 
+// PKCE helper functions for SHA-256 code challenge
+function generateCodeVerifier(): string {
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  return btoa(String.fromCharCode.apply(null, Array.from(array)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await window.crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(digest));
+  return btoa(String.fromCharCode.apply(null, hashArray))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
 interface SearchPanelProps {
   onMine: (filters: MiningFilters) => void;
   isMining: boolean;
@@ -30,22 +51,76 @@ export default function SearchPanel({
     }
   );
 
+  React.useEffect(() => {
+    if (initialFilters) {
+      setFilters((prev) => ({
+        ...prev,
+        ...initialFilters,
+      }));
+    }
+  }, [initialFilters]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!filters.query.trim()) return;
+    if (filters.searchMode === 'other_seller') {
+      if (!filters.sellerId?.trim()) return;
+    } else if (filters.searchMode !== 'seller' && !filters.query.trim()) {
+      return;
+    }
     onMine(filters);
   };
 
   const handleQuickSearch = (query: string) => {
-    const updated = { ...filters, query };
+    const updated = { ...filters, query, searchMode: 'general' as const };
     setFilters(updated);
     onMine(updated);
   };
 
   const selectedSite = ML_SITES.find((s) => s.id === filters.siteId) || ML_SITES[0];
+  const isSellerMode = filters.searchMode === 'seller';
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6" id="search-panel-container">
+      {/* Search Mode Tabs */}
+      <div className="flex border-b border-slate-100 pb-3 mb-5 gap-4 overflow-x-auto scrollbar-none">
+        <button
+          type="button"
+          disabled={isMining}
+          onClick={() => setFilters({ ...filters, searchMode: 'general' })}
+          className={`pb-2 px-1 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition cursor-pointer ${
+            filters.searchMode === 'general' || !filters.searchMode
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Mercado Livre Geral (Público)
+        </button>
+        <button
+          type="button"
+          disabled={isMining}
+          onClick={() => setFilters({ ...filters, searchMode: 'other_seller' })}
+          className={`pb-2 px-1 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition cursor-pointer ${
+            filters.searchMode === 'other_seller'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Anúncios de Outro Seller (Público)
+        </button>
+        <button
+          type="button"
+          disabled={isMining}
+          onClick={() => setFilters({ ...filters, searchMode: 'seller' })}
+          className={`pb-2 px-1 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition cursor-pointer ${
+            filters.searchMode === 'seller'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Meus Anúncios (Vendedor)
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Top bar: Site selector and Query input */}
         <div className="flex flex-col md:flex-row gap-3">
@@ -56,9 +131,9 @@ export default function SearchPanel({
             <select
               id="site-select"
               value={filters.siteId}
-              disabled={isMining}
+              disabled={isMining || isSellerMode}
               onChange={(e) => setFilters({ ...filters, siteId: e.target.value })}
-              className="w-full h-11 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 rounded-xl text-sm font-medium text-slate-700 transition cursor-pointer"
+              className="w-full h-11 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 rounded-xl text-sm font-medium text-slate-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {ML_SITES.map((site) => (
                 <option key={site.id} value={site.id}>
@@ -68,29 +143,71 @@ export default function SearchPanel({
             </select>
           </div>
 
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5 font-sans" htmlFor="query-input">
-              O que deseja minerar? (Termo de busca)
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400" />
-              <input
-                id="query-input"
-                type="text"
-                disabled={isMining}
-                placeholder="Ex: Teclado mecânico, Smartphone, Relógio inteligente..."
-                value={filters.query}
-                onChange={(e) => setFilters({ ...filters, query: e.target.value })}
-                className="w-full h-11 pl-11 pr-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 rounded-xl text-sm font-medium text-slate-800 transition outline-none placeholder:text-slate-400"
-              />
+          {filters.searchMode === 'other_seller' ? (
+            <>
+              <div className="w-full md:w-56">
+                <label className="block text-xs font-medium text-slate-500 mb-1.5 font-sans" htmlFor="seller-id-input">
+                  ID do Seller (Obrigatório)
+                </label>
+                <input
+                  id="seller-id-input"
+                  type="text"
+                  required
+                  disabled={isMining}
+                  placeholder="Ex: 730996151"
+                  value={filters.sellerId || ''}
+                  onChange={(e) => setFilters({ ...filters, sellerId: e.target.value })}
+                  className="w-full h-11 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 rounded-xl text-sm font-medium text-slate-800 transition outline-none placeholder:text-slate-400"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-500 mb-1.5 font-sans" htmlFor="query-input">
+                  Buscar no catálogo deste seller (Opcional)
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400" />
+                  <input
+                    id="query-input"
+                    type="text"
+                    disabled={isMining}
+                    placeholder="Deixe em branco para trazer todos os produtos..."
+                    value={filters.query}
+                    onChange={(e) => setFilters({ ...filters, query: e.target.value })}
+                    className="w-full h-11 pl-11 pr-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 rounded-xl text-sm font-medium text-slate-800 transition outline-none placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1.5 font-sans" htmlFor="query-input">
+                {isSellerMode 
+                  ? "Filtrar por título em seus anúncios (Opcional)" 
+                  : "O que deseja minerar? (Termo de busca)"}
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400" />
+                <input
+                  id="query-input"
+                  type="text"
+                  disabled={isMining}
+                  placeholder={isSellerMode
+                    ? "Deixe em branco para trazer todos os seus anúncios..."
+                    : "Ex: Teclado mecânico, Smartphone, Relógio inteligente..."}
+                  value={filters.query}
+                  onChange={(e) => setFilters({ ...filters, query: e.target.value })}
+                  className="w-full h-11 pl-11 pr-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-blue-500 rounded-xl text-sm font-medium text-slate-800 transition outline-none placeholder:text-slate-400"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex items-end gap-2 md:w-auto">
             <button
               type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className={`h-11 px-4 border rounded-xl flex items-center gap-2 text-sm font-medium transition cursor-pointer ${
+              disabled={isSellerMode}
+              className={`h-11 px-4 border rounded-xl flex items-center gap-2 text-sm font-medium transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                 showFilters
                   ? 'bg-blue-50 border-blue-200 text-blue-600'
                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -103,7 +220,11 @@ export default function SearchPanel({
 
             <button
               type="submit"
-              disabled={isMining || !filters.query.trim()}
+              disabled={
+                isMining ||
+                (filters.searchMode === 'other_seller' && !filters.sellerId?.trim()) ||
+                (filters.searchMode !== 'seller' && filters.searchMode !== 'other_seller' && !filters.query.trim())
+              }
               className="h-11 px-6 bg-blue-600 hover:bg-blue-700 active:scale-98 disabled:opacity-50 disabled:scale-100 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition cursor-pointer flex-1 md:flex-initial shadow-md shadow-blue-200/50"
               id="mine-submit-button"
             >
@@ -115,7 +236,7 @@ export default function SearchPanel({
               ) : (
                 <>
                   <Sparkles className="h-4 w-4" />
-                  <span>Minerar Mercado Livre</span>
+                  <span>{isSellerMode ? "Carregar Meus Anúncios" : "Minerar Mercado Livre"}</span>
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -261,14 +382,41 @@ export default function SearchPanel({
                     <label className="block text-xs font-bold text-slate-700 font-sans" htmlFor="token-input">
                       Mercado Livre Access Token (Opcional para Modo Oficial)
                     </label>
-                    <a
-                      href="https://developers.mercadolivre.com.br/pt_br/crie-uma-aplicacao-no-mercado-livre"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-blue-600 hover:underline font-semibold flex items-center gap-1"
-                    >
-                      Como obter um token? ↗
-                    </a>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const clientID = '3627938246458088';
+                          const redirectUri = window.location.origin + '/';
+                          
+                          const verifier = generateCodeVerifier();
+                          localStorage.setItem('ml_code_verifier', verifier);
+                          
+                          try {
+                            const challenge = await generateCodeChallenge(verifier);
+                            const authUrl = `https://auth.mercadolibre.com/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
+                            window.location.href = authUrl;
+                          } catch (err) {
+                            console.error('Failed to generate PKCE challenge:', err);
+                            // Fallback to plain URL if crypto fails
+                            const authUrl = `https://auth.mercadolibre.com/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+                            window.location.href = authUrl;
+                          }
+                        }}
+                        className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-100 font-bold transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Conectar ao Mercado Livre
+                      </button>
+                      <a
+                        href="https://developers.mercadolivre.com.br/pt_br/crie-uma-aplicacao-no-mercado-livre"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-600 hover:underline font-semibold flex items-center gap-1"
+                      >
+                        Como obter um token? ↗
+                      </a>
+                    </div>
                   </div>
                   <input
                     id="token-input"

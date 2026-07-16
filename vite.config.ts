@@ -12,14 +12,19 @@ export default defineConfig(() => {
       },
     },
     server: {
+      allowedHosts: true as any,
       proxy: {
         '/api-ml': {
-          target: 'https://api.mercadolibre.com',
+          target: 'http://localhost:5000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api-ml/, ''),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          },
+        },
+        '/api/auth': {
+          target: 'http://localhost:5000',
+          changeOrigin: true,
+        },
+        '/notifications': {
+          target: 'http://localhost:5000',
+          changeOrigin: true,
         },
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

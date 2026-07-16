@@ -29,143 +29,7 @@ export function getHighResImage(url: string): string {
   return secureUrl;
 }
 
-/**
- * Generates high-quality realistic mock products for fallback/demo mode
- */
-export function generateMockProducts(filters: MiningFilters): MLProduct[] {
-  const { query, limit, condition, minPrice, maxPrice } = filters;
-  const count = Math.min(limit || 50, 100);
-  const min = minPrice ? parseFloat(minPrice) : 50;
-  const max = maxPrice ? parseFloat(maxPrice) : 8000;
 
-  const products: MLProduct[] = [];
-  const queryLower = query.toLowerCase();
-
-  let category = 'generic';
-  if (queryLower.includes('phone') || queryLower.includes('iphone') || queryLower.includes('celular')) {
-    category = 'smartphone';
-  } else if (queryLower.includes('tv') || queryLower.includes('televis') || queryLower.includes('smart tv')) {
-    category = 'tv';
-  } else if (queryLower.includes('notebook') || queryLower.includes('laptop') || queryLower.includes('macbook')) {
-    category = 'notebook';
-  }
-
-  const phoneModels = ['iPhone 13 128GB', 'Samsung Galaxy S23 Ultra', 'iPhone 14 Pro Max 256GB', 'Xiaomi Redmi Note 12 Pro', 'Motorola Edge 40', 'iPhone 15 Pro 128GB', 'Samsung Galaxy A54 5G'];
-  const tvModels = ['Smart TV LG 50" 4K UHD', 'Smart TV Samsung 55" QLED 4K', 'Smart TV TCL 65" 4K HDR', 'Smart TV Philips 43" Full HD Ambilight', 'Smart TV LG OLEDEvo 55" 4K', 'Smart TV Samsung Neo QLED 65"'];
-  const notebookModels = ['Notebook Dell Inspiron 15', 'Lenovo IdeaPad 3 AMD Ryzen 5', 'MacBook Air M2 8GB 256GB SSD', 'Notebook Acer Aspire 5 Intel Core i5', 'Notebook Asus Vivobook 15', 'MacBook Pro M3 16GB 512GB SSD'];
-  const genericModels = [
-    `${query} Pro Edition`,
-    `${query} Premium Series`,
-    `${query} Slim Ultra`,
-    `${query} Advanced V2`,
-    `${query} Professional Standard`,
-    `${query} Compact Portable`,
-    `${query} Essential Pack`
-  ];
-
-  const brands = {
-    smartphone: ['Apple', 'Samsung', 'Xiaomi', 'Motorola'],
-    tv: ['LG', 'Samsung', 'TCL', 'Philips'],
-    notebook: ['Dell', 'Lenovo', 'Apple', 'Acer', 'Asus'],
-    generic: ['GenericCorp', 'Acme', 'TechCorp', 'PremiumBrands']
-  };
-
-  const images = {
-    smartphone: [
-      'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1565849906461-0965d34a19fc?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1580910051074-3eb694886505?w=350&auto=format&fit=crop&q=80'
-    ],
-    tv: [
-      'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1593789198777-f29bc259780e?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1601944179066-297acd3ad6d5?w=350&auto=format&fit=crop&q=80'
-    ],
-    notebook: [
-      'https://images.unsplash.com/photo-1496181130204-7552cc145cdb?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=350&auto=format&fit=crop&q=80'
-    ],
-    generic: [
-      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=350&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=350&auto=format&fit=crop&q=80'
-    ]
-  };
-
-  const sellerNicknames = ['STORE_OFICIAL', 'TECH_MAGAZINE', 'E-COMMERCE_BRASIL', 'BEST_DEALS', 'SHOP_RAPIDO', 'PRO_SHOP'];
-
-  for (let i = 0; i < count; i++) {
-    const id = `MLB-MOCK${Math.floor(Math.random() * 900000000 + 100000000)}`;
-    let modelName = '';
-    
-    if (category === 'smartphone') {
-      modelName = phoneModels[i % phoneModels.length];
-    } else if (category === 'tv') {
-      modelName = tvModels[i % tvModels.length];
-    } else if (category === 'notebook') {
-      modelName = notebookModels[i % notebookModels.length];
-    } else {
-      modelName = `${genericModels[i % genericModels.length]} #${i + 1}`;
-    }
-
-    // Generate random price within filters
-    const basePrice = min + (Math.random() * (Math.max(min + 10, max) - min));
-    const price = Math.round(basePrice * 100) / 100;
-    const originalPrice = Math.random() > 0.5 ? Math.round(price * 1.15 * 100) / 100 : null;
-
-    const catImages = images[category as keyof typeof images] || images.generic;
-    const thumbnail = catImages[i % catImages.length];
-
-    const prodCondition = condition === 'all' ? (Math.random() > 0.15 ? 'new' : 'used') : condition;
-
-    const prodShipping = {
-      free_shipping: filters.shipping === 'free' ? true : Math.random() > 0.4,
-      logistic_type: Math.random() > 0.5 ? 'fulfillment' : 'cross_docking'
-    };
-
-    const isOfficialStore = Math.random() > 0.7;
-    const sellerNick = sellerNicknames[i % sellerNicknames.length];
-
-    products.push({
-      id,
-      title: modelName,
-      price,
-      original_price: originalPrice,
-      currency_id: filters.siteId === 'MLU' ? 'UYU' : (filters.siteId === 'MLB' ? 'BRL' : 'USD'),
-      thumbnail,
-      permalink: 'https://www.mercadolivre.com.br',
-      condition: prodCondition,
-      shipping: prodShipping,
-      sold_quantity: Math.floor(Math.random() * 250) + 5,
-      available_quantity: Math.floor(Math.random() * 50) + 1,
-      official_store_id: isOfficialStore ? Math.floor(Math.random() * 1000) : null,
-      official_store_name: isOfficialStore ? `${sellerNick.replace('_', ' ')} Oficial` : '',
-      seller: {
-        id: Math.floor(Math.random() * 9000000) + 1000000,
-        nickname: sellerNick,
-        permalink: 'https://www.mercadolivre.com.br',
-        seller_reputation: {
-          power_seller_status: Math.random() > 0.5 ? 'platinum' : 'gold',
-          level_id: '5_green'
-        }
-      },
-      address: {
-        state_name: ['São Paulo', 'Rio de Janeiro', 'Minas Gerais', 'Paraná', 'Santa Catarina'][i % 5],
-        city_name: ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Florianópolis'][i % 5]
-      },
-      attributes: [
-        { id: 'BRAND', name: 'Marca', value_name: brands[category as keyof typeof brands][i % brands[category as keyof typeof brands].length] },
-        { id: 'MODEL', name: 'Modelo', value_name: modelName.split(' ')[1] || 'Standard' }
-      ]
-    });
-  }
-
-  return products;
-}
 
 /**
  * Mines products from Mercado Libre using the search API, supporting pagination.
@@ -176,9 +40,12 @@ export async function mineProducts(
   onProgress?: (fetched: number, total: number) => void,
   onDemoModeActive?: (active: boolean) => void
 ): Promise<MLProduct[]> {
-  const { siteId, query, condition, shipping, minPrice, maxPrice, limit, accessToken } = filters;
+  const { siteId, query, condition, shipping, minPrice, maxPrice, accessToken, searchMode } = filters;
   
-  if (!query.trim()) return [];
+  if (searchMode !== 'seller' && searchMode !== 'other_seller' && !query.trim()) return [];
+  if (searchMode === 'other_seller' && !filters.sellerId?.trim()) {
+    throw new Error("Você precisa especificar o ID do vendedor.");
+  }
 
   // Setup headers
   const headers: Record<string, string> = {
@@ -188,55 +55,250 @@ export async function mineProducts(
     headers['Authorization'] = `Bearer ${accessToken.trim()}`;
   }
 
-  let products: MLProduct[] = [];
-  const limitPerRequest = 50;
-  const totalToFetch = Math.min(limit, 200); // Caps mining at 200 items for speed and API safety
-  
-  let offset = 0;
-  let hasMore = true;
+  // Seller Mode: fetch own product listings using users/me/items/search
+  if (searchMode === 'seller') {
+    if (!accessToken) {
+      throw new Error("Você precisa estar conectado via API para buscar os seus anúncios.");
+    }
+    try {
+      // 1. Fetch user ID dynamically from users/me since /items/search doesn't support the 'me' alias
+      const profileResponse = await fetch(`${ML_API_BASE}/users/me`, { headers });
+      if (!profileResponse.ok) {
+        const errBody = await profileResponse.json().catch(() => ({}));
+        const err: any = new Error(`Erro ao obter perfil do usuário: ${errBody.message || errBody.error || profileResponse.statusText} (Status ${profileResponse.status})`);
+        err.status = profileResponse.status;
+        throw err;
+      }
+      const profileData = await profileResponse.json();
+      const userId = profileData.id;
+      if (!userId) {
+        throw new Error("Não foi possível identificar o seu ID de vendedor.");
+      }
 
-  // Build base query parameters
-  const baseParams = new URLSearchParams({
-    q: query,
-    limit: String(limitPerRequest),
+      // 2. Fetch own product listings using the numeric user ID
+      const searchUrl = `${ML_API_BASE}/users/${userId}/items/search?limit=50`;
+      const searchResponse = await fetch(searchUrl, { headers });
+      if (!searchResponse.ok) {
+        const errBody = await searchResponse.json().catch(() => ({}));
+        const err: any = new Error(`Erro ao buscar seus anúncios: ${errBody.message || errBody.error || searchResponse.statusText} (Status ${searchResponse.status})`);
+        err.status = searchResponse.status;
+        throw err;
+      }
+      
+      const searchData = await searchResponse.json();
+      const itemIds = searchData.results || [];
+      
+      if (itemIds.length === 0) {
+        return [];
+      }
+
+      // Limit to the first 15 items for testing
+      const targetIds = itemIds.slice(0, 15);
+      
+      if (onProgress) {
+        onProgress(5, targetIds.length);
+      }
+
+      const itemsUrl = `${ML_API_BASE}/items?ids=${targetIds.join(',')}`;
+      const itemsResponse = await fetch(itemsUrl, { headers });
+      
+      if (!itemsResponse.ok) {
+        const errBody = await itemsResponse.json().catch(() => ({}));
+        const err: any = new Error(`Erro ao obter detalhes dos seus anúncios: ${errBody.message || errBody.error || itemsResponse.statusText} (Status ${itemsResponse.status})`);
+        err.status = itemsResponse.status;
+        throw err;
+      }
+
+      const itemsData = await itemsResponse.json();
+      
+      if (onProgress) {
+        onProgress(10, targetIds.length);
+      }
+
+      const detailedProducts = itemsData.map((responseObj: any) => {
+        if (responseObj.code !== 200 || !responseObj.body) {
+          return null;
+        }
+
+        const item = responseObj.body;
+        return {
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          original_price: item.original_price || null,
+          currency_id: item.currency_id,
+          thumbnail: item.pictures?.[0]?.secure_url || item.pictures?.[0]?.url || getHighResImage(item.thumbnail || ''),
+          pictures: (item.pictures || []).map((pic: any) => ({
+            id: pic.id,
+            url: pic.secure_url || pic.url,
+          })),
+          permalink: item.permalink || '',
+          condition: item.condition || 'new',
+          shipping: {
+            free_shipping: item.shipping?.free_shipping || false,
+            logistic_type: item.shipping?.logistic_type || '',
+          },
+          sold_quantity: item.sold_quantity || item.sell_flow_info?.sold_quantity || 0,
+          available_quantity: item.available_quantity || 0,
+          official_store_id: item.official_store_id || null,
+          official_store_name: item.official_store_name || '',
+          seller: {
+            id: item.seller_id || 0,
+            nickname: 'Você',
+            permalink: '',
+          },
+          attributes: (item.attributes || []).map((attr: any) => ({
+            id: attr.id,
+            name: attr.name,
+            value_name: attr.value_name,
+          })),
+          warranty: item.warranty || '',
+          video_id: item.video_id || null,
+        };
+      }).filter((p: any): p is MLProduct => p !== null);
+
+      // If a search query is specified, filter in memory
+      if (query && query.trim()) {
+        const queryLower = query.toLowerCase();
+        return detailedProducts.filter((p: MLProduct) => p.title.toLowerCase().includes(queryLower));
+      }
+
+      if (onProgress) {
+        onProgress(targetIds.length, targetIds.length);
+      }
+      return detailedProducts;
+    } catch (error: any) {
+      console.error('Seller products mining failed:', error);
+      throw error;
+    }
+  }
+
+  // Define total items to mine (first 15 positions)
+  const totalToFetch = 15;
+
+  // Build query parameters for search
+  const params = new URLSearchParams({
+    limit: String(totalToFetch),
   });
+  if (searchMode === 'other_seller' && filters.sellerId) {
+    params.append('seller_id', filters.sellerId.trim());
+  }
+  if (query && query.trim()) {
+    params.append('q', query);
+  }
 
   if (condition !== 'all') {
-    baseParams.append('condition', condition);
+    params.append('condition', condition);
   }
   if (shipping === 'free') {
-    baseParams.append('shipping_cost', 'free');
+    params.append('shipping_cost', 'free');
   }
   if (minPrice) {
-    baseParams.append('price', `${minPrice}-${maxPrice || '*'}`);
+    params.append('price', `${minPrice}-${maxPrice || '*'}`);
   } else if (maxPrice) {
-    baseParams.append('price', `*-${maxPrice}`);
+    params.append('price', `*-${maxPrice}`);
   }
 
   try {
-    while (products.length < totalToFetch && hasMore) {
-      const params = new URLSearchParams(baseParams);
-      params.append('offset', String(offset));
-
-      const url = `${ML_API_BASE}/sites/${siteId}/search?${params.toString()}`;
-      
-      const response = await fetch(url, { headers });
-      
-      // If we encounter a CORS block, a 403 Forbidden, or 401 Unauthorized, fall back to mock data.
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    const searchUrl = `${ML_API_BASE}/sites/${siteId}/search?${params.toString()}`;
+    
+    const searchResponse = await fetch(searchUrl, { headers });
+    if (!searchResponse.ok) {
+      const errBody = await searchResponse.json().catch(() => ({}));
+      const err: any = new Error(`Failed to fetch search results: ${errBody.message || errBody.error || searchResponse.statusText} (Status ${searchResponse.status})`);
+      err.status = searchResponse.status;
+      throw err;
+    }
+    
+    const searchData = await searchResponse.json();
+    const searchResults = searchData.results || [];
+    
+    if (searchResults.length === 0) {
+      if (onDemoModeActive) {
+        onDemoModeActive(false);
       }
+      return [];
+    }
+
+    // Limit to the top 15 results
+    const topResults = searchResults.slice(0, totalToFetch);
+    const itemIds = topResults.map((item: any) => item.id);
+
+    if (onProgress) {
+      onProgress(5, totalToFetch); // Indicate progress starting
+    }
+
+    // 2. Fetch the rich details via multi-get /items endpoint
+    let detailedProducts: MLProduct[] = [];
+    try {
+      const itemsUrl = `${ML_API_BASE}/items?ids=${itemIds.join(',')}`;
+      const itemsResponse = await fetch(itemsUrl, { headers });
       
-      const data = await response.json();
-      const results = data.results || [];
-      
-      if (results.length === 0) {
-        hasMore = false;
-        break;
+      if (!itemsResponse.ok) {
+        throw new Error(`Failed to fetch items details: ${itemsResponse.status} ${itemsResponse.statusText}`);
       }
 
-      // Map response to our clean MLProduct format
-      const mappedResults: MLProduct[] = results.map((item: any) => ({
+      const itemsData = await itemsResponse.json();
+      
+      if (onProgress) {
+        onProgress(10, totalToFetch); // Progress step
+      }
+
+      // Map and merge search results with detailed data
+      detailedProducts = itemsData.map((responseObj: any) => {
+        if (responseObj.code !== 200 || !responseObj.body) {
+          return null;
+        }
+
+        const item = responseObj.body;
+        const searchItem = topResults.find((r: any) => r.id === item.id);
+
+        return {
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          original_price: item.original_price || searchItem?.original_price || null,
+          currency_id: item.currency_id,
+          thumbnail: item.pictures?.[0]?.secure_url || item.pictures?.[0]?.url || getHighResImage(item.thumbnail || searchItem?.thumbnail || ''),
+          pictures: (item.pictures || []).map((pic: any) => ({
+            id: pic.id,
+            url: pic.secure_url || pic.url,
+          })),
+          permalink: item.permalink || searchItem?.permalink || '',
+          condition: item.condition || searchItem?.condition || 'new',
+          shipping: {
+            free_shipping: item.shipping?.free_shipping || searchItem?.shipping?.free_shipping || false,
+            logistic_type: item.shipping?.logistic_type || searchItem?.shipping?.logistic_type || '',
+          },
+          sold_quantity: item.sold_quantity || item.sell_flow_info?.sold_quantity || searchItem?.sold_quantity || 0,
+          available_quantity: item.available_quantity || searchItem?.available_quantity || 0,
+          official_store_id: item.official_store_id || searchItem?.official_store_id || null,
+          official_store_name: item.official_store_name || searchItem?.official_store_name || '',
+          seller: {
+            id: item.seller_id || searchItem?.seller?.id || 0,
+            nickname: searchItem?.seller?.nickname || 'Vendedor',
+            permalink: searchItem?.seller?.permalink || '',
+            seller_reputation: searchItem?.seller?.seller_reputation,
+          },
+          address: searchItem?.address || (item.address ? {
+            state_name: item.address.state_name || '',
+            city_name: item.address.city_name || '',
+          } : undefined),
+          attributes: (item.attributes || []).map((attr: any) => ({
+            id: attr.id,
+            name: attr.name,
+            value_name: attr.value_name,
+          })),
+          warranty: item.warranty || '',
+          video_id: item.video_id || null,
+        };
+      }).filter((p: any): p is MLProduct => p !== null);
+
+    } catch (itemsErr) {
+      console.warn('Failed to fetch product details. Falling back to search metadata:', itemsErr);
+      
+      // Fallback: map search results directly if items details call fails
+      detailedProducts = topResults.map((item: any) => ({
         id: item.id,
         title: item.title,
         price: item.price,
@@ -257,10 +319,7 @@ export async function mineProducts(
           id: item.seller?.id || 0,
           nickname: item.seller?.nickname || 'Vendedor',
           permalink: item.seller?.permalink || '',
-          seller_reputation: item.seller?.seller_reputation ? {
-            power_seller_status: item.seller.seller_reputation.power_seller_status || null,
-            level_id: item.seller.seller_reputation.level_id || null,
-          } : undefined,
+          seller_reputation: item.seller?.seller_reputation,
         },
         address: item.address ? {
           state_name: item.address.state_name || '',
@@ -272,48 +331,23 @@ export async function mineProducts(
           value_name: attr.value_name,
         })),
       }));
-
-      products = [...products, ...mappedResults];
-      
-      // Update progress callback
-      if (onProgress) {
-        onProgress(products.length, totalToFetch);
-      }
-
-      offset += limitPerRequest;
-      
-      // Check if we reached the end of results
-      if (results.length < limitPerRequest || products.length >= totalToFetch) {
-        hasMore = false;
-      }
     }
 
+    if (onProgress) {
+      onProgress(totalToFetch, totalToFetch);
+    }
     if (onDemoModeActive) {
       onDemoModeActive(false);
     }
-    return products.slice(0, totalToFetch);
+    
+    return detailedProducts;
 
-  } catch (error) {
-    console.warn('API request failed. Falling back to Demo/Mock Mode:', error);
+  } catch (error: any) {
+    console.error('API request failed:', error);
     if (onDemoModeActive) {
-      onDemoModeActive(true);
+      onDemoModeActive(false);
     }
-    
-    // Simulate mining progress for better UX in mock mode
-    let progress = 0;
-    const mockProducts = generateMockProducts(filters);
-    const step = Math.ceil(mockProducts.length / 4);
-    
-    while (progress < mockProducts.length) {
-      progress = Math.min(progress + step, mockProducts.length);
-      if (onProgress) {
-        onProgress(progress, mockProducts.length);
-      }
-      // Brief delay to simulate network latency
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
-    
-    return mockProducts;
+    throw error;
   }
 }
 
@@ -321,78 +355,54 @@ export async function mineProducts(
  * Fetches full product details including high-res pictures and category attributes
  */
 export async function fetchProductDetails(productId: string, accessToken?: string): Promise<Partial<MLProduct>> {
-  if (productId.startsWith('MLB-MOCK')) {
-    // Return high-quality mock details
-    return {
-      pictures: [
-        { id: 'pic1', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80' },
-        { id: 'pic2', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80' },
-        { id: 'pic3', url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80' }
-      ],
-      available_quantity: Math.floor(Math.random() * 20) + 2,
-      video_id: null,
-      warranty: 'Garantia oficial de 12 meses com o fabricante.',
-    };
-  }
-
   const headers: Record<string, string> = {};
   if (accessToken && accessToken.trim()) {
     headers['Authorization'] = `Bearer ${accessToken.trim()}`;
   }
 
-  try {
-    const response = await fetch(`${ML_API_BASE}/items/${productId}`, { headers });
-    if (!response.ok) throw new Error('Failed to fetch details');
-    const data = await response.json();
-
-    return {
-      pictures: (data.pictures || []).map((pic: any) => ({
-        id: pic.id,
-        url: pic.secure_url || pic.url,
-      })),
-      attributes: (data.attributes || []).map((attr: any) => ({
-        id: attr.id,
-        name: attr.name,
-        value_name: attr.value_name,
-      })),
-      available_quantity: data.available_quantity || 0,
-      video_id: data.video_id || null,
-      warranty: data.warranty || '',
-    };
-  } catch (error) {
-    console.error('Error fetching product details, returning mock fallback:', error);
-    return {
-      pictures: [
-        { id: 'pic1', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80' }
-      ],
-      available_quantity: 5,
-      warranty: 'Informação de garantia indisponível.',
-    };
+  const response = await fetch(`${ML_API_BASE}/items/${productId}`, { headers });
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => ({}));
+    const err: any = new Error(`Erro ao obter detalhes do item: ${errBody.message || errBody.error || response.statusText} (Status ${response.status})`);
+    err.status = response.status;
+    throw err;
   }
+  const data = await response.json();
+
+  return {
+    pictures: (data.pictures || []).map((pic: any) => ({
+      id: pic.id,
+      url: pic.secure_url || pic.url,
+    })),
+    attributes: (data.attributes || []).map((attr: any) => ({
+      id: attr.id,
+      name: attr.name,
+      value_name: attr.value_name,
+    })),
+    available_quantity: data.available_quantity || 0,
+    video_id: data.video_id || null,
+    warranty: data.warranty || '',
+  };
 }
 
 /**
  * Fetches item description
  */
 export async function fetchProductDescription(productId: string, accessToken?: string): Promise<string> {
-  if (productId.startsWith('MLB-MOCK')) {
-    return 'Descrição do produto fornecida em modo de demonstração. Este produto simulado oferece os mais altos padrões de qualidade com ótimo custo-benefício, garantindo satisfação total para suas necessidades de trabalho, estudo e lazer.';
-  }
-
   const headers: Record<string, string> = {};
   if (accessToken && accessToken.trim()) {
     headers['Authorization'] = `Bearer ${accessToken.trim()}`;
   }
 
-  try {
-    const response = await fetch(`${ML_API_BASE}/items/${productId}/description`, { headers });
-    if (!response.ok) return '';
-    const data = await response.json();
-    return data.plain_text || data.text || '';
-  } catch (error) {
-    console.error('Error fetching product description:', error);
-    return 'Descrição de produto detalhada não pôde ser carregada do Mercado Livre.';
+  const response = await fetch(`${ML_API_BASE}/items/${productId}/description`, { headers });
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => ({}));
+    const err: any = new Error(`Erro ao obter descrição do item: ${errBody.message || errBody.error || response.statusText} (Status ${response.status})`);
+    err.status = response.status;
+    throw err;
   }
+  const data = await response.json();
+  return data.plain_text || data.text || '';
 }
 
 /**

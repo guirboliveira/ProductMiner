@@ -35,9 +35,10 @@ export default function ProductDetailModal({
 
     async function loadExtraData() {
       try {
+        const token = localStorage.getItem('ml_access_token') || undefined;
         const [extraDetails, descText] = await Promise.all([
-          fetchProductDetails(product!.id),
-          fetchProductDescription(product!.id),
+          fetchProductDetails(product!.id, token),
+          fetchProductDescription(product!.id, token),
         ]);
 
         setDetails(extraDetails);

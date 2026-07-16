@@ -59,6 +59,8 @@ export interface MiningFilters {
   maxPrice: string;
   limit: number;
   accessToken?: string;
+  searchMode?: 'general' | 'seller' | 'other_seller';
+  sellerId?: string;
 }
 
 export interface MiningStats {
