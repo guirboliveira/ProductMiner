@@ -97,6 +97,56 @@ app.post('/api/auth/token', async (req, res) => {
   }
 });
 
+app.post('/api/auth/refresh', async (req, res) => {
+  const { refreshToken } = req.body;
+  console.log('\n--- OAuth Token Refresh Request Received ---');
+  console.log(`RefreshToken: ${refreshToken ? refreshToken.substring(0, 15) + '...' : 'undefined'}`);
+  console.log('---------------------------------------------\n');
+
+  if (!refreshToken) {
+    return res.status(400).json({ error: 'Refresh token is required' });
+  }
+
+  const clientId = process.env.ML_CLIENT_ID;
+  const clientSecret = process.env.ML_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return res.status(500).json({ error: 'Mercado Libre credentials not configured on server' });
+  }
+
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+    });
+
+    const response = await fetch('https://api.mercadolibre.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('\n--- OAuth Refresh Error Response ---');
+      console.error(JSON.stringify(data, null, 2));
+      console.error('------------------------------------\n');
+      return res.status(response.status).json(data);
+    }
+
+    return res.json(data);
+  } catch (error: any) {
+    console.error('Error refreshing token:', error);
+    return res.status(500).json({ error: 'Internal server error during token refresh' });
+  }
+});
+
 // Proxy route to forward Mercado Libre API requests and log errors for debugging
 app.all('/api-ml/*', async (req, res) => {
   const targetPath = req.params[0] || '';

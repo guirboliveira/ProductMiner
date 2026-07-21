@@ -389,17 +389,28 @@ export default function SearchPanel({
                           const clientID = '3627938246458088';
                           const redirectUri = window.location.origin + '/';
                           
+                          const authDomains: Record<string, string> = {
+                            MLB: 'auth.mercadolivre.com.br',
+                            MLA: 'auth.mercadolibre.com.ar',
+                            MLM: 'auth.mercadolibre.com.mx',
+                            MLC: 'auth.mercadolibre.com.cl',
+                            MCO: 'auth.mercadolibre.com.co',
+                            MLU: 'auth.mercadolibre.com.uy',
+                            MPE: 'auth.mercadolibre.com.pe',
+                          };
+                          const authDomain = authDomains[filters.siteId] || 'auth.mercadolivre.com.br';
+                          
                           const verifier = generateCodeVerifier();
                           localStorage.setItem('ml_code_verifier', verifier);
                           
                           try {
                             const challenge = await generateCodeChallenge(verifier);
-                            const authUrl = `https://auth.mercadolibre.com/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
+                            const authUrl = `https://${authDomain}/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
                             window.location.href = authUrl;
                           } catch (err) {
                             console.error('Failed to generate PKCE challenge:', err);
                             // Fallback to plain URL if crypto fails
-                            const authUrl = `https://auth.mercadolibre.com/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+                            const authUrl = `https://${authDomain}/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
                             window.location.href = authUrl;
                           }
                         }}

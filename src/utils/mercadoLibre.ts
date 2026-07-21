@@ -470,3 +470,57 @@ export function calculateStats(products: MLProduct[]): MiningStats {
     usedConditionCount,
   };
 }
+
+/**
+ * Checks if the stored access token is expired or close to expiring,
+ * and refreshes it automatically using the stored refresh token.
+ */
+export async function checkAndRefreshToken(): Promise<string | undefined> {
+  const accessToken = localStorage.getItem('ml_access_token');
+  const refreshToken = localStorage.getItem('ml_refresh_token');
+  const expiresAtStr = localStorage.getItem('ml_token_expires_at');
+
+  if (!accessToken) return undefined;
+
+  // If there's no expiration info or refresh token, just return current access token
+  if (!expiresAtStr || !refreshToken) return accessToken;
+
+  const expiresAt = parseInt(expiresAtStr, 10);
+  const now = Date.now();
+
+  // If the token has expired or will expire in less than 5 minutes (300,000 ms), refresh it
+  if (expiresAt - now < 5 * 60 * 1000) {
+    console.log('Access token is expiring soon or expired. Auto-refreshing...');
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+
+      const data = await response.json();
+      if (data.access_token) {
+        localStorage.setItem('ml_access_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('ml_refresh_token', data.refresh_token);
+        }
+        if (data.expires_in) {
+          localStorage.setItem('ml_token_expires_at', (Date.now() + data.expires_in * 1000).toString());
+        }
+        console.log('Access token refreshed successfully.');
+        return data.access_token;
+      }
+    } catch (error) {
+      console.error('Error auto-refreshing token:', error);
+    }
+  }
+
+  return accessToken;
+}
+

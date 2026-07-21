@@ -11,6 +11,7 @@ import {
   ML_SITES,
   fetchProductDetails,
   fetchProductDescription,
+  checkAndRefreshToken,
 } from './utils/mercadoLibre';
 import SearchPanel from './components/SearchPanel';
 import DashboardStats from './components/DashboardStats';
@@ -27,6 +28,7 @@ import {
   TrendingUp,
   Award,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -50,8 +52,19 @@ export default function App() {
   const [isExtractingDetails, setIsExtractingDetails] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState({ current: 0, total: 0 });
 
+  const [showOnlyMyProducts, setShowOnlyMyProducts] = useState(false);
+
+  const filteredProducts = useMemo(() => {
+    if (!showOnlyMyProducts) return products;
+    const userIdStr = localStorage.getItem('ml_user_id');
+    const userId = userIdStr ? parseInt(userIdStr, 10) : null;
+    return products.filter((p) => {
+      return p.seller.nickname === 'Você' || (userId && p.seller.id === userId);
+    });
+  }, [products, showOnlyMyProducts]);
+
   // Calculate statistics
-  const stats: MiningStats = useMemo(() => calculateStats(products), [products]);
+  const stats: MiningStats = useMemo(() => calculateStats(filteredProducts), [filteredProducts]);
 
   // Read search history & token from localStorage on mount and check for OAuth code callback
   useEffect(() => {
@@ -64,21 +77,40 @@ export default function App() {
       console.error('Failed to read from localStorage', e);
     }
 
-    const savedToken = localStorage.getItem('ml_access_token');
-    if (savedToken) {
-      setCurrentFilters(prev => ({
-        ...(prev || {
-          query: '',
-          siteId: 'MLB',
-          condition: 'all',
-          shipping: 'all',
-          minPrice: '',
-          maxPrice: '',
-          limit: 100,
-        }),
-        accessToken: savedToken,
-      }));
-    }
+    const initTokens = async () => {
+      const refreshedToken = await checkAndRefreshToken();
+      const savedToken = refreshedToken || localStorage.getItem('ml_access_token');
+      if (savedToken) {
+        if (!localStorage.getItem('ml_user_id')) {
+          try {
+            const res = await fetch('/api-ml/users/me', {
+              headers: { 'Authorization': `Bearer ${savedToken}` }
+            });
+            if (res.ok) {
+              const profile = await res.json();
+              if (profile.id) {
+                localStorage.setItem('ml_user_id', profile.id.toString());
+              }
+            }
+          } catch (err) {
+            console.error('Failed to pre-fetch profile ID:', err);
+          }
+        }
+        setCurrentFilters(prev => ({
+          ...(prev || {
+            query: '',
+            siteId: 'MLB',
+            condition: 'all',
+            shipping: 'all',
+            minPrice: '',
+            maxPrice: '',
+            limit: 100,
+          }),
+          accessToken: savedToken,
+        }));
+      }
+    };
+    initTokens();
 
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -107,6 +139,15 @@ export default function App() {
           }
           if (data.access_token) {
             localStorage.setItem('ml_access_token', data.access_token);
+            if (data.refresh_token) {
+              localStorage.setItem('ml_refresh_token', data.refresh_token);
+            }
+            if (data.expires_in) {
+              localStorage.setItem('ml_token_expires_at', (Date.now() + data.expires_in * 1000).toString());
+            }
+            if (data.user_id) {
+              localStorage.setItem('ml_user_id', data.user_id.toString());
+            }
             setCurrentFilters(prev => ({
               ...(prev || {
                 query: '',
@@ -138,11 +179,19 @@ export default function App() {
   useEffect(() => {
     if (currentFilters?.accessToken) {
       localStorage.setItem('ml_access_token', currentFilters.accessToken);
+    } else {
+      localStorage.removeItem('ml_access_token');
+      localStorage.removeItem('ml_refresh_token');
+      localStorage.removeItem('ml_token_expires_at');
+      localStorage.removeItem('ml_user_id');
     }
   }, [currentFilters?.accessToken]);
 
   const handleLogout = () => {
     localStorage.removeItem('ml_access_token');
+    localStorage.removeItem('ml_refresh_token');
+    localStorage.removeItem('ml_token_expires_at');
+    localStorage.removeItem('ml_user_id');
     setCurrentFilters(prev => prev ? { ...prev, accessToken: '' } : undefined);
     alert('Desconectado com sucesso!');
   };
@@ -158,17 +207,25 @@ export default function App() {
 
   // Perform mining action
   const handleMine = async (filters: MiningFilters) => {
+    let activeFilters = { ...filters };
+    
+    // Auto-refresh token if needed before mining
+    const refreshedToken = await checkAndRefreshToken();
+    if (refreshedToken) {
+      activeFilters.accessToken = refreshedToken;
+    }
+
     setIsMining(true);
     setProducts([]);
     setError(null);
     setErrorStatus(null);
     setSelectedExtractIds([]);
-    setMiningProgress({ current: 0, total: filters.limit });
-    setCurrentFilters(filters);
+    setMiningProgress({ current: 0, total: activeFilters.limit });
+    setCurrentFilters(activeFilters);
 
     try {
       const results = await mineProducts(
-        filters,
+        activeFilters,
         (current, total) => {
           setMiningProgress({ current, total });
         }
@@ -181,13 +238,13 @@ export default function App() {
         const newMine: SavedMine = {
           id: Math.random().toString(36).substring(2, 9),
           timestamp: Date.now(),
-          name: filters.query,
-          filters,
+          name: activeFilters.query,
+          filters: activeFilters,
           productCount: results.length,
         };
 
         // Enforce maximum history capacity of 8 searches
-        const updatedHistory = [newMine, ...history.filter((h) => h.filters.query !== filters.query)].slice(0, 8);
+        const updatedHistory = [newMine, ...history.filter((h) => h.filters.query !== activeFilters.query)].slice(0, 8);
         setHistory(updatedHistory);
         saveHistoryToStorage(updatedHistory);
       } else {
@@ -258,11 +315,15 @@ export default function App() {
   // Bulk extract details (attributes & descriptions)
   const handleExtractDetails = async (idsToExtract: string[]) => {
     if (idsToExtract.length === 0) return;
+    
+    // Auto-refresh token if needed before bulk extraction
+    const refreshedToken = await checkAndRefreshToken();
+    
     setIsExtractingDetails(true);
     setExtractionProgress({ current: 0, total: idsToExtract.length });
     setError(null);
 
-    const token = localStorage.getItem('ml_access_token') || undefined;
+    const token = refreshedToken || localStorage.getItem('ml_access_token') || undefined;
 
     const extractSingleItem = async (productId: string) => {
       try {
@@ -317,12 +378,12 @@ export default function App() {
 
   // Find products selected for comparison
   const comparedProducts = useMemo(() => {
-    return products.filter((p) => compareProductIds.includes(p.id));
-  }, [products, compareProductIds]);
+    return filteredProducts.filter((p) => compareProductIds.includes(p.id));
+  }, [filteredProducts, compareProductIds]);
 
   const activeProductForDetails = useMemo(() => {
-    return products.find((p) => p.id === selectedProductId) || null;
-  }, [products, selectedProductId]);
+    return filteredProducts.find((p) => p.id === selectedProductId) || null;
+  }, [filteredProducts, selectedProductId]);
 
   const activeSite = currentFilters?.siteId || 'MLB';
   const selectedSiteData = ML_SITES.find((s) => s.id === activeSite) || ML_SITES[0];
@@ -350,6 +411,28 @@ export default function App() {
           <div className="flex items-center gap-4">
             {currentFilters?.accessToken ? (
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleMine({
+                    query: '',
+                    siteId: 'MLB',
+                    condition: 'all',
+                    shipping: 'all',
+                    minPrice: '',
+                    maxPrice: '',
+                    limit: 100,
+                    searchMode: 'seller',
+                    accessToken: currentFilters.accessToken
+                  })}
+                  disabled={isMining}
+                  className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 px-3.5 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isMining && currentFilters?.searchMode === 'seller' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Award className="h-3.5 w-3.5" />
+                  )}
+                  Ver Meus Anúncios
+                </button>
                 <span className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   Conectado via API
@@ -542,11 +625,11 @@ export default function App() {
             )}
 
             {/* Price ranges and Logistic charts */}
-            <ChartsPanel products={products} currencySymbol={selectedSiteData.currency} />
+            <ChartsPanel products={filteredProducts} currencySymbol={selectedSiteData.currency} />
 
             {/* Keyword tags, bargains, competitors */}
             <InsightsPanel
-              products={products}
+              products={filteredProducts}
               averagePrice={stats.averagePrice}
               currencySymbol={selectedSiteData.currency}
             />
@@ -558,13 +641,28 @@ export default function App() {
                   <h3 className="text-sm font-bold text-slate-800">Listagem Completa de Produtos Minerados</h3>
                   <p className="text-xs text-slate-400">Varredura profunda extraída da API pública</p>
                 </div>
-                <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
-                  {products.length} Anúncios
-                </span>
+                <div className="flex items-center gap-3">
+                  {localStorage.getItem('ml_access_token') && (
+                    <button
+                      onClick={() => setShowOnlyMyProducts(!showOnlyMyProducts)}
+                      className={`text-xs px-3 py-1.5 rounded-xl font-bold border transition cursor-pointer flex items-center gap-1.5 ${
+                        showOnlyMyProducts
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Award className="h-3.5 w-3.5" />
+                      {showOnlyMyProducts ? 'Mostrar Todos' : 'Filtrar Apenas Meus Anúncios'}
+                    </button>
+                  )}
+                  <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                    {filteredProducts.length} Anúncios
+                  </span>
+                </div>
               </div>
 
               <ProductTable
-                products={products}
+                products={filteredProducts}
                 onSelectProduct={setSelectedProductId}
                 selectedCompareIds={compareProductIds}
                 onToggleCompare={handleToggleCompare}
