@@ -65,7 +65,11 @@ export async function mineProducts(
       const profileResponse = await fetch(`${ML_API_BASE}/users/me`, { headers });
       if (!profileResponse.ok) {
         const errBody = await profileResponse.json().catch(() => ({}));
-        const err: any = new Error(`Erro ao obter perfil do usuário: ${errBody.message || errBody.error || profileResponse.statusText} (Status ${profileResponse.status})`);
+        let message = errBody.message || errBody.error || profileResponse.statusText;
+        if (profileResponse.status === 401) {
+          message = 'Sua sessão do Mercado Livre expirou ou o token de acesso é inválido. Por favor, reconecte sua conta do Mercado Livre.';
+        }
+        const err: any = new Error(`Erro ao obter perfil do usuário: ${message} (Status ${profileResponse.status})`);
         err.status = profileResponse.status;
         throw err;
       }
@@ -501,6 +505,10 @@ export async function checkAndRefreshToken(): Promise<string | undefined> {
       });
 
       if (!response.ok) {
+        localStorage.removeItem('ml_access_token');
+        localStorage.removeItem('ml_refresh_token');
+        localStorage.removeItem('ml_token_expires_at');
+        localStorage.removeItem('ml_user_id');
         throw new Error('Failed to refresh token');
       }
 
@@ -518,9 +526,66 @@ export async function checkAndRefreshToken(): Promise<string | undefined> {
       }
     } catch (error) {
       console.error('Error auto-refreshing token:', error);
+      localStorage.removeItem('ml_access_token');
+      localStorage.removeItem('ml_refresh_token');
+      localStorage.removeItem('ml_token_expires_at');
+      return undefined;
     }
   }
 
   return accessToken;
+}
+
+// PKCE helper functions for SHA-256 code challenge
+export function generateCodeVerifier(): string {
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  return btoa(String.fromCharCode.apply(null, Array.from(array)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+export async function generateCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await window.crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(digest));
+  return btoa(String.fromCharCode.apply(null, hashArray))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/**
+ * Redirects the user to the Mercado Libre OAuth authorization URL using PKCE.
+ */
+export async function redirectToMLAuth(siteId: string = 'MLB') {
+  const clientID = '3627938246458088';
+  const redirectUri = window.location.origin + '/';
+  
+  const authDomains: Record<string, string> = {
+    MLB: 'auth.mercadolivre.com.br',
+    MLA: 'auth.mercadolibre.com.ar',
+    MLM: 'auth.mercadolibre.com.mx',
+    MLC: 'auth.mercadolibre.com.cl',
+    MCO: 'auth.mercadolibre.com.co',
+    MLU: 'auth.mercadolibre.com.uy',
+    MPE: 'auth.mercadolibre.com.pe',
+  };
+  const authDomain = authDomains[siteId] || 'auth.mercadolivre.com.br';
+  
+  const verifier = generateCodeVerifier();
+  localStorage.setItem('ml_code_verifier', verifier);
+  
+  try {
+    const challenge = await generateCodeChallenge(verifier);
+    const authUrl = `https://${authDomain}/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
+    window.location.href = authUrl;
+  } catch (err) {
+    console.error('Failed to generate PKCE challenge:', err);
+    const authUrl = `https://${authDomain}/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    window.location.href = authUrl;
+  }
 }
 

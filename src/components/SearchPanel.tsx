@@ -1,29 +1,8 @@
 import React, { useState } from 'react';
 import { Search, SlidersHorizontal, ArrowRight, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import { MiningFilters } from '../types';
-import { ML_SITES } from '../utils/mercadoLibre';
+import { ML_SITES, redirectToMLAuth } from '../utils/mercadoLibre';
 import { motion, AnimatePresence } from 'motion/react';
-
-// PKCE helper functions for SHA-256 code challenge
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(32);
-  window.crypto.getRandomValues(array);
-  return btoa(String.fromCharCode.apply(null, Array.from(array)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await window.crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(digest));
-  return btoa(String.fromCharCode.apply(null, hashArray))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
 
 interface SearchPanelProps {
   onMine: (filters: MiningFilters) => void;
@@ -385,35 +364,7 @@ export default function SearchPanel({
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={async () => {
-                          const clientID = '3627938246458088';
-                          const redirectUri = window.location.origin + '/';
-                          
-                          const authDomains: Record<string, string> = {
-                            MLB: 'auth.mercadolivre.com.br',
-                            MLA: 'auth.mercadolibre.com.ar',
-                            MLM: 'auth.mercadolibre.com.mx',
-                            MLC: 'auth.mercadolibre.com.cl',
-                            MCO: 'auth.mercadolibre.com.co',
-                            MLU: 'auth.mercadolibre.com.uy',
-                            MPE: 'auth.mercadolibre.com.pe',
-                          };
-                          const authDomain = authDomains[filters.siteId] || 'auth.mercadolivre.com.br';
-                          
-                          const verifier = generateCodeVerifier();
-                          localStorage.setItem('ml_code_verifier', verifier);
-                          
-                          try {
-                            const challenge = await generateCodeChallenge(verifier);
-                            const authUrl = `https://${authDomain}/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
-                            window.location.href = authUrl;
-                          } catch (err) {
-                            console.error('Failed to generate PKCE challenge:', err);
-                            // Fallback to plain URL if crypto fails
-                            const authUrl = `https://${authDomain}/authorization?response_type=code&client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-                            window.location.href = authUrl;
-                          }
-                        }}
+                        onClick={() => redirectToMLAuth(filters.siteId)}
                         className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-100 font-bold transition flex items-center gap-1 cursor-pointer"
                       >
                         <Sparkles className="h-3 w-3" />

@@ -12,6 +12,7 @@ import {
   fetchProductDetails,
   fetchProductDescription,
   checkAndRefreshToken,
+  redirectToMLAuth,
 } from './utils/mercadoLibre';
 import SearchPanel from './components/SearchPanel';
 import DashboardStats from './components/DashboardStats';
@@ -29,6 +30,8 @@ import {
   Award,
   RefreshCw,
   Loader2,
+  KeyRound,
+  Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -523,7 +526,76 @@ export default function App() {
               className="overflow-hidden bg-white border border-rose-100 rounded-2xl shadow-md"
               id="error-notification-bar"
             >
-              {errorStatus === 403 || errorStatus === 401 || error.toLowerCase().includes('403') || error.toLowerCase().includes('forbidden') ? (
+              {errorStatus === 401 || error.toLowerCase().includes('401') || error.toLowerCase().includes('unauthorized') || error.toLowerCase().includes('perfil do usuário') ? (
+                <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-amber-100 border border-amber-200/80 rounded-2xl bg-amber-50/20">
+                  {/* Left Column: Icon & Title */}
+                  <div className="p-6 md:w-80 bg-amber-50/60 flex flex-col justify-between space-y-4">
+                    <div className="space-y-3">
+                      <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                        <KeyRound className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-950">Sessão Expirada ou Não Autorizada</h4>
+                        <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-extrabold rounded uppercase tracking-wider mt-1">
+                          Erro 401 Unauthorized
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                      Seu token de acesso do Mercado Livre expirou ou a sessão não foi autorizada. Para buscar seus anúncios ou consultar seus dados privados, você precisa renovar sua conexão.
+                    </p>
+                  </div>
+
+                  {/* Right Column: Step-by-Step & Action Button */}
+                  <div className="p-6 flex-1 bg-white space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                      <div>
+                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          Como resolver?
+                        </h5>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Renove suas credenciais para liberar o acesso imediatamente.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => redirectToMLAuth(currentFilters?.siteId)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Conectar com Mercado Livre
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex gap-3">
+                        <div className="h-5 w-5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          1
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium">
+                          Clique no botão azul <strong>"Conectar com Mercado Livre"</strong> acima.
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="h-5 w-5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          2
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium">
+                          Faça login e autorize a aplicação na página oficial do Mercado Livre.
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="h-5 w-5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          3
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium">
+                          Você retornará para a aplicação com o novo token ativado e a busca por <strong>"Pegar meus anúncios"</strong> funcionará normalmente.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : errorStatus === 403 || error.toLowerCase().includes('403') || error.toLowerCase().includes('forbidden') ? (
                 <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-rose-100">
                   {/* Left Column: Icon & Title */}
                   <div className="p-6 md:w-80 bg-rose-50/50 flex flex-col justify-between space-y-4">
